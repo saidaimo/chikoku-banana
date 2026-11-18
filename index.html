@@ -904,18 +904,49 @@ function makeIdentity(){
  return {ownerId:hex(16),token:hex(32)};
 }
 function setRegisterStatus(message,isError=false){const el=document.getElementById('registerError');if(!el)return;el.style.display='block';el.style.color=isError?'#a12626':'#555';el.style.background=isError?'#fff0f0':'#fffbea';el.textContent=message;}
+// GASはデータ保存用の裏側サーバーとして使用。利用者はGitHub Pagesから開ける。
+// GAS公開URLを開いた場合はgoogle.script.run、GitHub PagesではdoPostのpostMessage橋渡しを使う。
+const GAS_WEB_APP_URL='https://script.google.com/macros/s/AKfycbzYCr53q0KbJQ-QwVVZSgXCiaw1LduwH3OblMWi_BaZfchR213QYpVbeY5_N1jy7TNOJQ/exec';
 function gasRequest(action,payload={}){
  return new Promise((resolve,reject)=>{
-  if(typeof google==='undefined'||!google.script||!google.script.run){reject(new Error('Apps Scriptの公開URLから開いてください。HTMLファイルを直接開いているため、サーバー通信ができません。'));return}
   let settled=false;
-  const timer=setTimeout(()=>{if(!settled){settled=true;reject(new Error('サーバーから30秒以内に返事がありませんでした。通信状態を確認してページを再読み込みしてください。登録が完了している可能性もあるため、すぐに同じ名前で再登録せず、まず「アカウント入力」を試してください。'))}},30000);
-  const finish=(fn,value)=>{if(settled)return;settled=true;clearTimeout(timer);fn(value)};
+  let frame=null;
+  const timer=setTimeout(()=>finish(reject,new Error('サーバーから30秒以内に返事がありませんでした。通信状態を確認してページを再読み込みしてください。登録が完了している可能性もあるため、すぐに同じ名前で再登録せず、まず「アカウント入力」を試してください。')),30000);
+  const cleanup=()=>{window.removeEventListener('message',onMessage);if(frame){frame.remove();frame=null;}};
+  const finish=(fn,value)=>{if(settled)return;settled=true;clearTimeout(timer);cleanup();fn(value)};
+  const isAppsScript=typeof google!=='undefined'&&google.script&&google.script.run;
+  if(isAppsScript){
+   try{
+    google.script.run.withSuccessHandler(data=>{
+     if(data&&data.ok)finish(resolve,data);else finish(reject,new Error(data&&data.error?data.error:'サーバー処理に失敗しました（操作：'+action+'）。'));
+    }).withFailureHandler(err=>finish(reject,new Error((err&&err.message)?err.message:'サーバーに接続できませんでした')))
+     .apiRequest(action,payload,getIdentity());
+   }catch(err){finish(reject,new Error('サーバー呼び出しに失敗しました：'+(err&&err.message?err.message:String(err))));}
+   return;
+  }
+  // GitHub Pages等の通常サイト用。レスポンスはGAS doPostからiframe経由で受け取る。
   try{
-   google.script.run.withSuccessHandler(data=>{
-    if(data&&data.ok)finish(resolve,data);else finish(reject,new Error(data&&data.error?data.error:'サーバー処理に失敗しました（操作：'+action+'）。'));
-   }).withFailureHandler(err=>finish(reject,new Error((err&&err.message?err.message:'サーバーに接続できませんでした'))))
-    .apiRequest(action,payload,getIdentity());
-  }catch(err){finish(reject,new Error('サーバー呼び出しに失敗しました：'+(err&&err.message?err.message:String(err))));}
+   const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
+   const requestId=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+   frame=document.createElement('iframe');
+   frame.name='cb_gas_'+requestId;
+   frame.style.display='none';
+   frame.setAttribute('aria-hidden','true');
+   document.body.appendChild(frame);
+   const onMessage=event=>{
+    if(!frame||event.source!==frame.contentWindow)return;
+    const data=event.data;
+    if(!data||data.channel!=='CHIKOKU_BANANA_GAS_RESPONSE'||data.requestId!==requestId)return;
+    if(data.result&&data.result.ok)finish(resolve,data.result);
+    else finish(reject,new Error(data.result&&data.result.error?data.result.error:'サーバー処理に失敗しました（操作：'+action+'）。'));
+   };
+   window.addEventListener('message',onMessage);
+   const form=document.createElement('form');
+   form.method='POST';form.action=GAS_WEB_APP_URL;form.target=frame.name;form.style.display='none';
+   const input=document.createElement('input');input.type='hidden';input.name='data';
+   input.value=JSON.stringify({requestId,action,payload,identity:getIdentity()});
+   form.appendChild(input);document.body.appendChild(form);form.submit();form.remove();
+  }catch(err){finish(reject,new Error('GitHub Pagesからサーバーに接続できませんでした：'+(err&&err.message?err.message:String(err))));}
  });
 }
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='feedbackText')updateFeedbackCount();});
