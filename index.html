@@ -868,7 +868,9 @@ function gasRequest(action,payload={}){
    frame.setAttribute('aria-hidden','true');
    document.body.appendChild(frame);
    onMessage=event=>{
-    if(!frame||event.source!==frame.contentWindow)return;
+    // HtmlServiceは内部にサンドボックス用フレームを作る場合があるため、
+    // event.sourceと外側iframeの一致では判定しない。128bitの一回限りIDで照合する。
+    if(!frame)return;
     const data=event.data;
     if(!data||data.channel!=='CHIKOKU_BANANA_GAS_RESPONSE'||data.requestId!==requestId)return;
     if(data.result&&data.result.ok)finish(resolve,data.result);
