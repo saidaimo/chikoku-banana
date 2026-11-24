@@ -840,8 +840,15 @@ function setRegisterStatus(message,isError=false){const el=document.getElementBy
 // GASはデータ保存用の裏側サーバーとして使用。利用者はGitHub Pagesから開ける。
 // GAS公開URLを開いた場合はgoogle.script.run、GitHub PagesではdoPostのpostMessage橋渡しを使う。
 const GAS_WEB_APP_URL='https://script.google.com/macros/s/AKfycbzYCr53q0KbJQ-QwVVZSgXCiaw1LduwH3OblMWi_BaZfchR213QYpVbeY5_N1jy7TNOJQ/exec';
+const gasReadInflight=new Map();
+let notificationBrowserCache=null;
+let notificationBrowserCacheAt=0;
 function gasRequest(action,payload={}){
- return new Promise((resolve,reject)=>{
+ const readOnly=['getNotifications','getSchoolOptions','getCalendarSettings','getMyTitles','getMissions','getBananaTree','getMorningPlan','incomingRequests','listFriends','friendRanking','ranking'];
+ const cacheKey=readOnly.includes(action)?action+':'+JSON.stringify(payload)+':'+String((getIdentity()||{}).ownerId||'') : '';
+ if(action==='getNotifications'&&notificationBrowserCache&&Date.now()-notificationBrowserCacheAt<60000)return Promise.resolve(notificationBrowserCache);
+ if(cacheKey&&gasReadInflight.has(cacheKey))return gasReadInflight.get(cacheKey);
+ const requestPromise=new Promise((resolve,reject)=>{
   let settled=false;
   let frame=null;
   let onMessage=null;
@@ -884,6 +891,9 @@ function gasRequest(action,payload={}){
    form.appendChild(input);document.body.appendChild(form);form.submit();form.remove();
   }catch(err){finish(reject,new Error('GitHub Pagesからサーバーに接続できませんでした：'+(err&&err.message?err.message:String(err))));}
  });
+ if(cacheKey){gasReadInflight.set(cacheKey,requestPromise);requestPromise.finally(()=>gasReadInflight.delete(cacheKey)).catch(()=>{});}
+ if(action==='getNotifications')requestPromise.then(value=>{notificationBrowserCache=value;notificationBrowserCacheAt=Date.now();}).catch(()=>{});
+ return requestPromise;
 }
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='feedbackText')updateFeedbackCount();});
 let attendanceStatusLoadedFromServer=false;
@@ -1493,7 +1503,7 @@ async function submitAttendanceCode(){
  if(msg)msg.textContent='サーバーで出席コードを確認中…';
  if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='確認中…';}
  try{
-  const r=await gasRequest('recordAttendance',{code});
+  const r=await gasRequest('recordAttendance',{code});notificationBrowserCache=null;
   if(r.profile){profile={...profile,...r.profile};persist();refreshProfile()}
   const statuses=attendanceStatuses();statuses[r.date]=r.status;localStorage.setItem('chikokuBananaAttendanceStatuses',JSON.stringify(statuses));attendanceStatusLoadedFromServer=true;updateAttendanceButton();
   if(r.status==='登校'){document.body.classList.remove('attendance-flash');void document.body.offsetWidth;document.body.classList.add('attendance-flash');setTimeout(()=>document.body.classList.remove('attendance-flash'),850)}
