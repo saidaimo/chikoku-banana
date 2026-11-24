@@ -841,13 +841,21 @@ function setRegisterStatus(message,isError=false){const el=document.getElementBy
 // GAS公開URLを開いた場合はgoogle.script.run、GitHub PagesではdoPostのpostMessage橋渡しを使う。
 const GAS_WEB_APP_URL='https://script.google.com/macros/s/AKfycbzYCr53q0KbJQ-QwVVZSgXCiaw1LduwH3OblMWi_BaZfchR213QYpVbeY5_N1jy7TNOJQ/exec';
 const gasReadInflight=new Map();
+const gasReadCache=new Map();
 let notificationBrowserCache=null;
 let notificationBrowserCacheAt=0;
 function gasRequest(action,payload={}){
- const readOnly=['getNotifications','getSchoolOptions','getCalendarSettings','getMyTitles','getMissions','getBananaTree','getMorningPlan','incomingRequests','listFriends','friendRanking','ranking'];
+ const readOnly=['getNotifications','getSchoolOptions','getCalendarSettings','getMyTitles','getMissions','getBananaTree','getMorningPlan','incomingRequests','listFriends','friendRanking','ranking','rankingBundle'];
  const cacheKey=readOnly.includes(action)?action+':'+JSON.stringify(payload)+':'+String((getIdentity()||{}).ownerId||'') : '';
- if(action==='getNotifications'&&notificationBrowserCache&&Date.now()-notificationBrowserCacheAt<60000)return Promise.resolve(notificationBrowserCache);
+ const now=Date.now();
+ const cacheTtl=action==='getSchoolOptions'?600000:(action==='getNotifications'?60000:(action==='getCalendarSettings'?120000:15000));
+ if(action==='getNotifications'&&notificationBrowserCache&&now-notificationBrowserCacheAt<60000)return Promise.resolve(notificationBrowserCache);
+ if(cacheKey){
+  const cached=gasReadCache.get(cacheKey);
+  if(cached&&now-cached.at<cacheTtl)return Promise.resolve(cached.value);
+ }
  if(cacheKey&&gasReadInflight.has(cacheKey))return gasReadInflight.get(cacheKey);
+ if(!cacheKey)gasReadCache.clear();
  const requestPromise=new Promise((resolve,reject)=>{
   let settled=false;
   let frame=null;
@@ -891,7 +899,10 @@ function gasRequest(action,payload={}){
    form.appendChild(input);document.body.appendChild(form);form.submit();form.remove();
   }catch(err){finish(reject,new Error('GitHub Pagesからサーバーに接続できませんでした：'+(err&&err.message?err.message:String(err))));}
  });
- if(cacheKey){gasReadInflight.set(cacheKey,requestPromise);requestPromise.finally(()=>gasReadInflight.delete(cacheKey)).catch(()=>{});}
+ if(cacheKey){
+  gasReadInflight.set(cacheKey,requestPromise);
+  requestPromise.then(value=>gasReadCache.set(cacheKey,{at:Date.now(),value})).finally(()=>gasReadInflight.delete(cacheKey)).catch(()=>{});
+ }
  if(action==='getNotifications')requestPromise.then(value=>{notificationBrowserCache=value;notificationBrowserCacheAt=Date.now();}).catch(()=>{});
  return requestPromise;
 }
@@ -931,7 +942,7 @@ function showScreen(id){
  if(id==='missions'){loadMissions();}
  if(id==='themeChange'){renderThemeChange();}
  if(id==='profile'){loadOwnedTitles();}
- if(id==='ranking'){renderRanking();renderFriendRanking();}
+ if(id==='ranking'){renderRankingBundle();}
  if(id==='developer'&&!developerUnlocked){id='profile'}
  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
  const target=$(id);if(!target){console.warn('画面が見つかりません:',id);return}target.classList.add('active');
@@ -1103,10 +1114,10 @@ function appendRankingRow(el,x,rank,{showFriendButton=false,showSelfLabel=true}=
  }
  el.appendChild(row);
 }
-async function renderRanking(){
+async function renderRanking(data=null){
  const el=$('localRanking');if(!el)return;el.textContent='ランキングを読み込み中…';
  try{
-  const r=await gasRequest('ranking');
+  const r=data||await gasRequest('ranking');
   const ranking=(Array.isArray(r.ranking)?r.ranking:[]).filter(x=>String(x.nickname||'').trim()&&String(x.nickname).toLowerCase()!=='nickname'&&Number.isFinite(Number(x.bananas)));
   el.innerHTML='';
   if(!ranking.length&&!r.myEntry){el.textContent='まだランキングがありません。';return;}
@@ -1149,16 +1160,19 @@ async function sendRankingFriendRequest(person,button){
  }
 }
 
-async function renderFriendRanking(){
+async function renderFriendRanking(data=null){
  const el=$('friendRanking');
  if(!el)return;
  el.textContent='ランキングを読み込み中…';
  el.setAttribute('aria-busy','true');
  try{
   if(!getIdentity()) throw new Error('ログイン情報を確認できません。いったんホームに戻り、アカウント入力からログインし直してください。');
-  // サーバー応答が止まった場合も、読み込み表示のまま放置しない。
-  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('サーバーの応答が遅れています。時間をおいて「再読み込み」を押してください。')),25000));
-  const r=await Promise.race([gasRequest('friendRanking'),timeout]);
+  let r=data;
+  if(!r){
+   // サーバー応答が止まった場合も、読み込み表示のまま放置しない。
+   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('サーバーの応答が遅れています。時間をおいて「再読み込み」を押してください。')),25000));
+   r=await Promise.race([gasRequest('friendRanking'),timeout]);
+  }
   const ranking=Array.isArray(r.ranking)?r.ranking:[];
   el.innerHTML='';
   if(!ranking.length){el.textContent='フレンドがまだ表示できません。フレンド申請が「承認済み」になっているか確認してね。';return;}
@@ -1170,6 +1184,21 @@ async function renderFriendRanking(){
   el.append(message,retry);
  }finally{
   el.removeAttribute('aria-busy');
+ }
+}
+
+async function renderRankingBundle(){
+ try{
+  const result=await gasRequest('rankingBundle');
+  await Promise.all([
+   renderRanking(result.globalRanking),
+   renderFriendRanking(result.friendRanking)
+  ]);
+ }catch(e){
+  const message='ランキングを取得できませんでした。 '+(e&&e.message?e.message:String(e));
+  ['localRanking','friendRanking'].forEach(id=>{
+   const el=$(id);if(el){el.textContent=message;el.removeAttribute('aria-busy');}
+  });
  }
 }
 
