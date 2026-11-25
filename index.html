@@ -848,7 +848,7 @@ const gasReadCache=new Map();
 let notificationBrowserCache=null;
 let notificationBrowserCacheAt=0;
 function gasRequest(action,payload={}){
- const readOnly=['getNotifications','getSchoolOptions','getCalendarSettings','getMyTitles','getMissions','getBananaTree','getMorningPlan','incomingRequests','listFriends','friendRanking','ranking','rankingBundle'];
+ const readOnly=['getNotifications','getSchoolOptions','getCalendarSettings','getMyTitles','getBananaTree','getMorningPlan','incomingRequests','listFriends','friendRanking','ranking','rankingBundle'];
  const cacheKey=readOnly.includes(action)?action+':'+JSON.stringify(payload)+':'+String((getIdentity()||{}).ownerId||'') : '';
  const now=Date.now();
  const cacheTtl=action==='getSchoolOptions'?600000:(action==='getNotifications'?60000:(action==='getCalendarSettings'?120000:15000));
@@ -1271,13 +1271,12 @@ async function startApp(){
  if(identity){
   // 保存済みセッションをサーバーで確認。正しければ同じ端末では自動ログイン。
   try{
-   const r=await gasRequest('getProfile');
+   const r=await gasRequest('getProfileFast');
    if(r.profile){
     profile=r.profile;persist();applyTheme();refreshProfile();showScreen('home');
-    mergeAttendanceStatuses((r.attendance&&typeof r.attendance==='object')?r.attendance:{});mergeAttendanceTimes(r.attendanceTimes||{});
-    attendanceStatusLoadedFromServer=true;updateAttendanceButton();
-    localStorage.setItem('chikokuBananaHolidays',JSON.stringify(Array.isArray(r.holidays)?r.holidays:[]));
-    renderCalendar();
+    attendanceStatusLoadedFromServer=false;updateAttendanceButton();
+    // 自動ログインでも重い履歴同期はホーム表示後に行う。
+    setTimeout(()=>{syncServerProfile();},30);
     return;
    }
    throw new Error('保存済みログイン情報を確認できませんでした。');
@@ -1326,7 +1325,16 @@ async function loginAccount(){
  const username=$('loginUsername').value.trim(),password=$('loginPassword').value;
  const msg=$('loginMessage');if(!username||!password){msg.textContent='ユーザー名とパスワードを入力してね。';return;}
  const btn=document.querySelector('#login .primary');if(btn){btn.disabled=true;btn.textContent='ログイン中…';}
- try{const identity=makeIdentity();localStorage.setItem(identityKey,JSON.stringify(identity));const r=await gasRequest('login',{username,password});if(r.identity&&r.identity.ownerId&&r.identity.token)localStorage.setItem(identityKey,JSON.stringify(r.identity));profile={...r.profile};persist();refreshNotificationBadge(false);mergeAttendanceStatuses((r.attendance&&typeof r.attendance==='object')?r.attendance:{});mergeAttendanceTimes(r.attendanceTimes||{});attendanceStatusLoadedFromServer=true;if(Array.isArray(r.holidays))localStorage.setItem('chikokuBananaHolidays',JSON.stringify(r.holidays));else localStorage.setItem('chikokuBananaHolidays','[]');applyTheme();refreshProfile();renderCalendar();showScreen('home');setTimeout(openMorningSetupIfNeeded,250);}
+ try{
+  const identity=makeIdentity();localStorage.setItem(identityKey,JSON.stringify(identity));
+  const r=await gasRequest('login',{username,password});
+  if(r.identity&&r.identity.ownerId&&r.identity.token)localStorage.setItem(identityKey,JSON.stringify(r.identity));
+  profile={...r.profile};persist();applyTheme();refreshProfile();renderCalendar();showScreen('home');
+  attendanceStatusLoadedFromServer=false;
+  // 出席履歴・休日・お知らせの同期はホーム表示を待たせずに実行。
+  setTimeout(()=>{syncServerProfile();},30);
+  setTimeout(openMorningSetupIfNeeded,250);
+ }
  catch(e){localStorage.removeItem(identityKey);msg.textContent=e.message||'ログインできませんでした。';}
  finally{if(btn){btn.disabled=false;btn.textContent='ログイン';}}
 }
