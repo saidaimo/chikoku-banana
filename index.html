@@ -257,6 +257,7 @@ body.attendance-flash{animation:jst-green-flash .85s ease-in-out}
 .ranking-icon{text-align:center;font-size:20px}
 .avatar-photo{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%}.ranking-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:50%;font-size:20px}.ranking-icon .avatar-photo{width:28px;height:28px}.profile-top .avatar-big{overflow:hidden;border-radius:50%;display:flex;align-items:center;justify-content:center}.avatar-big .avatar-photo{width:100%;height:100%;object-fit:cover}.avatar-upload-tools{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.avatar-upload-tools button{flex:1;min-width:120px}.avatar-preview{width:76px;height:76px;border-radius:50%;overflow:hidden;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;background:var(--soft);font-size:38px}.avatar-preview img{width:100%;height:100%;object-fit:cover}
 .ranking-name{min-width:0;overflow-wrap:anywhere}.ranking-user-name{display:block}.ranking-user-title{display:block;margin-top:2px;font-size:9px;font-weight:700;color:var(--muted);line-height:1.25}.ranking-self-label{font-size:11px;color:var(--muted);font-weight:800;margin-left:4px}
+.ranking-name{cursor:pointer}.ranking-name:focus{outline:2px solid var(--accent);outline-offset:3px;border-radius:5px}.ranking-profile-head{display:flex;align-items:center;gap:14px;margin:8px 0 16px}.ranking-profile-avatar{width:76px;height:76px;flex:0 0 76px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:42px;overflow:hidden;border:2px solid var(--line)}.ranking-profile-avatar img{width:100%;height:100%;object-fit:cover}.ranking-profile-identity{min-width:0}.ranking-profile-name{font-size:21px;font-weight:900;overflow-wrap:anywhere}.ranking-profile-title{font-size:13px;color:var(--muted);font-weight:800;margin-top:3px}.ranking-profile-rank{font-size:12px;color:var(--muted);margin-top:4px}.ranking-profile-bio{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border-radius:13px;padding:12px;min-height:42px;font-size:14px;line-height:1.55}.ranking-profile-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.ranking-profile-stats>div{background:var(--soft);border-radius:12px;padding:10px 4px;text-align:center;min-width:0}.ranking-profile-stats strong{display:block;font-size:21px;font-weight:900}.ranking-profile-stats span{display:block;font-size:11px;color:var(--muted);font-weight:800;margin-top:3px}
 .ranking-code{display:block;color:var(--muted);font-size:12px;font-weight:600;margin-top:2px}
 .ranking-stat{white-space:nowrap;font-size:13px;font-variant-numeric:tabular-nums}
 @media(max-width:420px){.ranking-row{grid-template-columns:24px 24px minmax(0,1fr) 32px;gap:5px;padding:9px 4px}.ranking-stat{grid-column:3;justify-self:start;font-size:12px}.ranking-name{grid-column:3}.ranking-icon{grid-row:1 / span 2}.ranking-rank{grid-row:1 / span 2}.ranking-friend-add{grid-column:4;grid-row:1 / span 2;width:30px;height:30px}}
@@ -685,6 +686,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-m
     <div class="profile-line profile-edit-line"><div><strong>学校名</strong><span id="displaySchool"></span></div><button class="secondary profile-change-button" type="button" onclick="openSchoolChange()">学校名を変更</button></div>
     <div class="profile-line profile-edit-line"><div><strong>学年</strong><span id="displayGrade"></span></div><button class="secondary profile-change-button" type="button" onclick="openGradeChange()">学年を変更</button></div>
     <div class="profile-line"><strong>称号</strong><div style="display:flex;gap:8px;align-items:center"><select id="ownedTitleSelect" aria-label="使用する称号" style="flex:1;min-width:0"></select><button class="secondary profile-change-button" type="button" onclick="saveCurrentTitle()">変更</button></div><div class="hint" id="titleChangeMessage" style="margin-top:8px">ミッションをクリアすると新しい称号を獲得できるよ。</div></div>
+    <div class="profile-line"><strong>自己紹介</strong><textarea id="profileBioInput" maxlength="120" rows="3" placeholder="ひとこと自己紹介を書こう（120文字まで）" style="width:100%;box-sizing:border-box;margin-top:8px;border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;background:var(--surface);color:var(--ink);resize:vertical"></textarea><button class="secondary" type="button" onclick="saveProfileBio()">自己紹介を保存</button><div class="hint" id="profileBioMessage" role="status"></div></div>
     <div class="profile-line"><strong>フレンドコード</strong><span id="displayCode"></span></div>
     <button class="secondary" type="button" onclick="openPasswordChange()">パスワードを変更する</button>
     <button class="secondary" type="button" onclick="signOut()">サインアウト</button>
@@ -722,6 +724,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-m
 </nav>
 </div>
 
+<div class="modal" id="rankingProfileModal" onclick="if(event.target===this)closeRankingProfile()"><div class="modal-card ranking-profile-card"><div class="modal-title">プロフィールカード <button class="close" type="button" onclick="closeRankingProfile()">×</button></div><div class="ranking-profile-head"><div class="ranking-profile-avatar" id="rankingProfileAvatar">🍌</div><div class="ranking-profile-identity"><div class="ranking-profile-name" id="rankingProfileName"></div><div class="ranking-profile-title" id="rankingProfileTitle"></div><div class="ranking-profile-rank" id="rankingProfileRank"></div></div></div><div class="ranking-profile-bio" id="rankingProfileBio">自己紹介はまだありません。</div><div class="ranking-profile-stats"><div><strong id="rankingProfileBananas">0</strong><span>🍌 バナナ</span></div><div><strong id="rankingProfileStreak">0日</strong><span>🔥 連続登校</span></div></div><p class="hint" id="rankingProfileNote" style="margin:12px 0 0;text-align:center"></p></div></div>
 <div class="modal" id="schoolChangeModal" onclick="if(event.target===this)closeProfileModal('schoolChangeModal')"><div class="modal-card"><div class="modal-title">学校名を変更 <button class="close" type="button" onclick="closeProfileModal('schoolChangeModal')">×</button></div><p class="hint">変更したい学校を選んでね。</p><select id="profileSchoolSelect" style="width:100%;min-height:46px;margin:8px 0 14px"></select><div id="schoolChangeMessage" class="hint" role="status"></div><button class="primary" type="button" id="schoolChangeSave" onclick="saveSchoolChange()">変更を保存</button></div></div>
 <div class="modal" id="gradeChangeModal" onclick="if(event.target===this)closeProfileModal('gradeChangeModal')"><div class="modal-card"><div class="modal-title">学年を変更 <button class="close" type="button" onclick="closeProfileModal('gradeChangeModal')">×</button></div><p class="hint" id="gradeChangeSchoolName"></p><select id="profileGradeSelect" style="width:100%;min-height:46px;margin:8px 0 14px"></select><div id="gradeChangeMessage" class="hint" role="status"></div><button class="primary" type="button" id="gradeChangeSave" onclick="saveGradeChange()">変更を保存</button></div></div>
 <div class="modal" id="passwordChangeModal" onclick="if(event.target===this)closeProfileModal('passwordChangeModal')"><div class="modal-card"><div class="modal-title">パスワードを変更 <button class="close" type="button" onclick="closeProfileModal('passwordChangeModal')">×</button></div><p class="hint">新しいパスワードを8文字以上で入力してね。</p><label for="newPasswordChange">新しいパスワード</label><input id="newPasswordChange" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="8文字以上" style="width:100%;box-sizing:border-box;margin:6px 0 12px"><label for="confirmPasswordChange">新しいパスワード（確認）</label><input id="confirmPasswordChange" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="もう一度入力" style="width:100%;box-sizing:border-box;margin:6px 0 12px"><button type="button" class="password-toggle" id="changePasswordToggle" onclick="togglePasswordVisibility(['newPasswordChange','confirmPasswordChange'],'changePasswordToggle')">パスワードを表示</button><div id="passwordChangeMessage" class="hint" role="status" style="margin:8px 0"></div><button class="primary" type="button" id="passwordChangeSave" onclick="savePasswordChange()">新しいパスワードに変更</button></div></div>
@@ -1093,7 +1096,8 @@ function makeRankingName(x, showSelfLabel){
  const main=document.createElement('span');main.className='ranking-user-name';main.textContent=String(x.nickname||'')+String(x.code||'').replace(/\D/g,'').slice(-4).padStart(4,'0');
  if(showSelfLabel&&x.isMe){const me=document.createElement('span');me.className='ranking-self-label';me.textContent='（自分）';main.appendChild(me);}
  name.appendChild(main);
- const titleName=String(x.titleName||'').trim();if(titleName){const title=document.createElement('span');title.className='ranking-user-title';title.textContent=titleName;name.appendChild(title);}
+ name.setAttribute('role','button');name.setAttribute('tabindex','0');name.setAttribute('aria-label',String(x.nickname||'')+'のプロフィールを開く');
+ const titleName=cleanTitleName(x.titleName);if(titleName){const title=document.createElement('span');title.className='ranking-user-title';title.textContent=titleName;name.appendChild(title);}
  return name;
 }
 function appendRankingRow(el,x,rank,{showFriendButton=false,showSelfLabel=true}={}){
@@ -1102,6 +1106,8 @@ function appendRankingRow(el,x,rank,{showFriendButton=false,showSelfLabel=true}=
  const icon=document.createElement('span');icon.className='ranking-icon';
  if(x.avatarData&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(x.avatarData)){const img=document.createElement('img');img.className='avatar-photo';img.src=x.avatarData;img.alt='';icon.appendChild(img);}else icon.textContent=x.icon||'🍌';
  const name=makeRankingName(x,showSelfLabel);
+ name.addEventListener('click',()=>openRankingProfile(x,Number(rank||x.rank)||0));
+ name.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openRankingProfile(x,Number(rank||x.rank)||0);}});
  const bananas=document.createElement('span');bananas.className='ranking-stat';bananas.textContent='🍌 '+Number(x.bananas||0)+'本';
  const streak=document.createElement('span');streak.className='ranking-stat';streak.textContent='🔥 '+Number(x.streak||0)+'日';
  row.append(rankEl,icon,name,bananas,streak);
@@ -1147,6 +1153,31 @@ async function renderRanking(data=null){
   }
  }catch(e){el.innerHTML='';const msg=document.createElement('div');msg.className='ranking-error';msg.textContent='ランキングを取得できません：'+e.message;el.appendChild(msg);}
 }
+function cleanTitleName(value){
+ return String(value||'').replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu,'').trim();
+}
+function openRankingProfile(person,rank){
+ const modal=$('rankingProfileModal');if(!modal||!person)return;
+ const avatar=$('rankingProfileAvatar');avatar.innerHTML='';
+ if(person.avatarData&&/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(person.avatarData)){const img=document.createElement('img');img.src=person.avatarData;img.alt='';avatar.appendChild(img);}else avatar.textContent=String(person.icon||'🍌');
+ $('rankingProfileName').textContent=String(person.nickname||'ユーザー')+(person.code?' #'+String(person.code).replace(/\D/g,'').slice(-4).padStart(4,'0'):'');
+ $('rankingProfileTitle').textContent=cleanTitleName(person.titleName||'初心者バナナ');
+ $('rankingProfileRank').textContent=rank>0?'ランキング '+rank+'位':'ランキング順位 —';
+ $('rankingProfileBio').textContent=String(person.bio||'自己紹介はまだありません。');
+ $('rankingProfileBananas').textContent=String(Number(person.bananas)||0);
+ $('rankingProfileStreak').textContent=String(Number(person.streak)||0)+'日';
+ $('rankingProfileNote').textContent=person.isMe?'これはあなたのプロフィールカードです。':'ランキングから開いたプロフィールカードです。';
+ modal.classList.add('open');
+}
+function closeRankingProfile(){const modal=$('rankingProfileModal');if(modal)modal.classList.remove('open');}
+async function saveProfileBio(){
+ const input=$('profileBioInput'),message=$('profileBioMessage');if(!input||!profile)return;
+ const bio=String(input.value||'').trim().slice(0,120);
+ if(message)message.textContent='保存中…';
+ try{const r=await gasRequest('saveProfileBio',{bio});if(r.profile){profile={...profile,...r.profile};persist();refreshProfile();}if(message)message.textContent='自己紹介を保存したよ！';}
+ catch(e){if(message)message.textContent='保存できませんでした：'+(e.message||e);}
+}
+
 async function sendRankingFriendRequest(person,button){
  if(button.disabled)return;
  const originalIcon=button.innerHTML;
@@ -1425,13 +1456,14 @@ function refreshProfile(){
  const full=profile.nickname+profile.code;
  $('homeName').textContent=full;
  $('profileName').textContent=full;
- const titleText=String(profile.titleName||'初心者バナナ');if($('homeTitle'))$('homeTitle').textContent=titleText;if($('profileTitle'))$('profileTitle').textContent=titleText;
+ const titleText=cleanTitleName(profile.titleName||'初心者バナナ');if($('homeTitle'))$('homeTitle').textContent=titleText;if($('profileTitle'))$('profileTitle').textContent=titleText;
  renderAvatar('homeAvatar',profile.avatarData,profile.icon);
  renderAvatar('profileAvatar',profile.avatarData,profile.icon);
  $('displayName').textContent=full;
  $('displaySchool').textContent=profile.school||'未設定';
  $('displayGrade').textContent=profile.grade||'未設定';
  $('displayCode').textContent=profile.code;
+ if($('profileBioInput')&&document.activeElement!==$('profileBioInput'))$('profileBioInput').value=String(profile.bio||'');
  $('smallStreak').textContent=profile.streak;
  $('bigStreak').textContent=profile.streak;
  $('profileStreak').textContent=profile.streak;
@@ -1544,7 +1576,7 @@ async function submitAttendanceCode(){
 
 async function loadOwnedTitles(){
  const select=$('ownedTitleSelect'),message=$('titleChangeMessage');if(!select||!profile)return;
- try{const r=await gasRequest('getMyTitles');select.innerHTML='';(r.titles||[]).forEach(t=>{const o=document.createElement('option');o.value=t.titleId;o.textContent=t.titleName;select.appendChild(o)});select.value=r.currentTitleId||profile.titleId||'BEGINNER_BANANA';const chosen=(r.titles||[]).find(t=>t.titleId===select.value);if(chosen){profile.titleId=chosen.titleId;profile.titleName=chosen.titleName;persist();refreshProfile();}if(message)message.textContent='獲得した称号から好きなものを選べるよ。';}
+ try{const r=await gasRequest('getMyTitles');select.innerHTML='';(r.titles||[]).forEach(t=>{const o=document.createElement('option');o.value=t.titleId;o.textContent=cleanTitleName(t.titleName);select.appendChild(o)});select.value=r.currentTitleId||profile.titleId||'BEGINNER_BANANA';const chosen=(r.titles||[]).find(t=>t.titleId===select.value);if(chosen){profile.titleId=chosen.titleId;profile.titleName=chosen.titleName;persist();refreshProfile();}if(message)message.textContent='獲得した称号から好きなものを選べるよ。';}
  catch(e){if(message)message.textContent='称号を読み込めませんでした：'+e.message;}
 }
 async function saveCurrentTitle(){
