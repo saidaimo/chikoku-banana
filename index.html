@@ -1673,11 +1673,20 @@ async function selectTheme(id){
  const t=themes.find(x=>x.id===id);if(!t||!profile)return;
  const ownedThemes=Array.isArray(profile.ownedThemes)?profile.ownedThemes:['banana'];
  if(!ownedThemes.includes(id)){alert('このテーマはまだ購入していません。ショップで購入してね。');return;}
+ if(profile.theme===id)return;
+ // 先に端末内へ反映。サーバー保存の完了を待たず、押した瞬間に色を切り替える。
+ const previousTheme=profile.theme||'banana';
+ profile={...profile,theme:id};
+ persist();applyTheme();renderThemeChange();
  try{
   const r=await gasRequest('applyTheme',{theme:id});
   if(r.profile)profile={...profile,...r.profile};
+  // サーバーが返したテーマを最終状態として同期する。
   persist();applyTheme();refreshProfile();renderThemeChange();
- }catch(e){alert('テーマを変更できませんでした。\n'+e.message)}
+ }catch(e){
+  profile={...profile,theme:previousTheme};persist();applyTheme();refreshProfile();renderThemeChange();
+  alert('テーマを保存できませんでした。元のテーマに戻しました。\n'+e.message);
+ }
 }
 function ensureRequestRefreshButton(){
  const box=$('requestEmpty');if(!box)return;
@@ -1687,6 +1696,22 @@ function ensureRequestRefreshButton(){
 }
 
 let friendListCache=[];
+function renderFriendListItems(box,items){
+ box.innerHTML='';
+ if(!items.length){box.innerHTML='<div class="empty-icon">🍌</div><h3>フレンドはまだいません</h3><p>フレンド検索から友達を追加しよう！</p>';return;}
+ items.forEach(x=>{
+  const item=document.createElement('div');item.className='card';item.style.cssText='display:flex;flex-direction:column;gap:2px;margin:4px 0 8px;padding:5px 14px 7px;border-radius:20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box';
+  const name=document.createElement('strong');name.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;font-size:18px;line-height:1.05;overflow-wrap:anywhere;margin:0;min-height:26px;width:100%';
+  const shownCode=String(x.code||'').replace(/\D/g,'').slice(-4).padStart(4,'0');name.textContent='';
+  if(x.avatarData&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(x.avatarData)){const img=document.createElement('img');img.className='avatar-photo';img.style.cssText='display:block;width:34px;height:34px;flex:0 0 34px;border-radius:50%;margin:0';img.src=x.avatarData;name.append(img);}else name.append(document.createTextNode((x.icon||'🍌')+' '));
+  name.append(document.createTextNode(String(x.nickname||'')+shownCode));
+  const stats=document.createElement('div');stats.style.cssText='font-size:14px;line-height:1.15;color:var(--muted);margin:-1px 0 0;text-align:center';stats.textContent='🍌 '+Number(x.bananas||0)+'本　🔥 '+Number(x.streak||0)+'日連続　｜ 今日：'+String(x.todayStatus||'未出席');
+  const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:-3px';
+  const detail=document.createElement('button');detail.className='secondary';detail.style.cssText='min-height:46px;padding-top:8px;padding-bottom:8px';detail.textContent='プロフィール';detail.onclick=()=>showFriendDetails(shownCode);
+  const gift=document.createElement('button');gift.className='primary';gift.style.cssText='min-height:46px;padding-top:8px;padding-bottom:8px';gift.textContent='🍌 プレゼント';gift.onclick=()=>sendBananaGift(shownCode,String(x.nickname||''));
+  actions.append(detail,gift);item.append(name,stats,actions);box.appendChild(item);
+ });
+}
 async function friendTab(button,tab){
  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
  button.classList.add('active');
@@ -1705,12 +1730,20 @@ async function friendTab(button,tab){
    if(incoming.length){const heading=document.createElement('h3');heading.textContent='📩 届いた申請';heading.style.margin='14px 0 8px';box.appendChild(heading);
     incoming.forEach(x=>{const card=document.createElement('div');card.className='card';card.style.cssText='display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:10px 0 14px;padding:16px;border-radius:20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box';const info=document.createElement('div');info.style.cssText='font-size:17px;font-weight:850;line-height:1.5;overflow-wrap:anywhere';const shownCode=String(x.code||'').replace(/\D/g,'').slice(-4).padStart(4,'0');if(x.avatarData&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(x.avatarData)){const img=document.createElement('img');img.className='avatar-photo';img.style.cssText='width:34px;height:34px;vertical-align:middle;margin-right:8px';img.src=x.avatarData;info.append(img);}else info.append(document.createTextNode((x.icon||'🍌')+' '));info.append(document.createTextNode(String(x.nickname||'')+shownCode));const actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px;width:100%';const yes=document.createElement('button');yes.className='primary';yes.style.cssText='flex:1;min-width:0';yes.textContent='承認する';yes.onclick=()=>respondToFriend(x.fromOwnerId,'accept',yes);const no=document.createElement('button');no.className='secondary';no.style.cssText='flex:1;min-width:0';no.textContent='拒否';no.onclick=()=>respondToFriend(x.fromOwnerId,'reject');actions.append(yes,no);card.append(info,actions);box.appendChild(card);});
    }
-    }catch(e){box.innerHTML='<p>申請を取得できません：'+e.message+'</p>';}
+  }catch(e){box.innerHTML='<p>申請を取得できません：'+e.message+'</p>';}
   ensureRequestRefreshButton();
  }else{
-  box.innerHTML='<div class="empty-icon">🍌</div><h3>フレンドを読み込み中…</h3>';
-  try{const r=await gasRequest('listFriends');friendListCache=Array.isArray(r.friends)?r.friends:[];box.innerHTML='';if(!r.friends.length){box.innerHTML='<div class="empty-icon">🍌</div><h3>フレンドはまだいません</h3><p>フレンド検索から友達を追加しよう！</p>';return;}r.friends.forEach(x=>{const item=document.createElement('div');item.className='card';item.style.cssText='display:flex;flex-direction:column;gap:2px;margin:4px 0 8px;padding:5px 14px 7px;border-radius:20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box';const name=document.createElement('strong');name.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;font-size:18px;line-height:1.05;overflow-wrap:anywhere;margin:0;min-height:26px;width:100%';const shownCode=String(x.code||'').replace(/\D/g,'').slice(-4).padStart(4,'0');name.textContent='';if(x.avatarData&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(x.avatarData)){const img=document.createElement('img');img.className='avatar-photo';img.style.cssText='display:block;width:34px;height:34px;flex:0 0 34px;border-radius:50%;margin:0';img.src=x.avatarData;name.append(img);}else name.append(document.createTextNode((x.icon||'🍌')+' '));name.append(document.createTextNode(String(x.nickname||'')+shownCode));const stats=document.createElement('div');stats.style.cssText='font-size:14px;line-height:1.15;color:var(--muted);margin:-1px 0 0;text-align:center';stats.textContent='🍌 '+Number(x.bananas||0)+'本　🔥 '+Number(x.streak||0)+'日連続　｜ 今日：'+String(x.todayStatus||'未出席');const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:-3px';const detail=document.createElement('button');detail.className='secondary';detail.style.cssText='min-height:46px;padding-top:8px;padding-bottom:8px';detail.textContent='プロフィール';detail.onclick=()=>showFriendDetails(shownCode);const gift=document.createElement('button');gift.className='primary';gift.style.cssText='min-height:46px;padding-top:8px;padding-bottom:8px';gift.textContent='🍌 プレゼント';gift.onclick=()=>sendBananaGift(shownCode,String(x.nickname||''));actions.append(detail,gift);item.append(name,stats,actions);box.appendChild(item);});}
-  catch(e){box.textContent='フレンドを取得できません：'+e.message;}
+  const cacheKey='chikokuBananaFriends:'+String(profile?.code||profile?.username||'guest');
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(cacheKey)||'null');}catch(e){}
+  if(saved&&Array.isArray(saved.friends)){friendListCache=saved.friends;renderFriendListItems(box,friendListCache);}
+  else box.innerHTML='<div class="empty-icon">🍌</div><h3>フレンドを読み込み中…</h3>';
+  try{
+   const r=await gasRequest('listFriends');
+   friendListCache=Array.isArray(r.friends)?r.friends:[];
+   try{localStorage.setItem(cacheKey,JSON.stringify({savedAt:Date.now(),friends:friendListCache}));}catch(e){}
+   // 通信中に別画面へ移動していたら、非表示の一覧を上書きしない。
+   if($('friends')?.classList.contains('active')&&$('friendList')?.classList.contains('hidden')===false)renderFriendListItems(box,friendListCache);
+  }catch(e){if(!saved)box.textContent='フレンドを取得できません：'+e.message;}
  }
 }
 async function showFriendDetails(code){
@@ -2144,14 +2177,12 @@ async function restoreSavedSession(){
  // 保存済みプロフィールがある場合は先にホームを描画し、裏でログイン状態を確認する。
  if(profile){applyTheme();refreshProfile();showScreen('home');}
  try{
-  const r=await gasRequest('getProfile');
+  const r=await gasRequest('getProfileFast');
   if(!r.profile)throw new Error('プロフィールを取得できませんでした。');
-  profile={...r.profile};persist();applyTheme();refreshProfile();
-  mergeAttendanceStatuses((r.attendance&&typeof r.attendance==='object')?r.attendance:{});
-  mergeAttendanceTimes(r.attendanceTimes||{});attendanceStatusLoadedFromServer=true;updateAttendanceButton();
-  localStorage.setItem('chikokuBananaHolidays',JSON.stringify(Array.isArray(r.holidays)?r.holidays:[]));
-  renderCalendar();showScreen('home');
-  // 自動ログインでも朝の設定を読み込み、登校時刻を画面に反映する。
+  profile={...r.profile};persist();applyTheme();refreshProfile();showScreen('home');
+  // 初回画面を出した後に、出席履歴・休日・お知らせなどの重い同期を行う。
+  attendanceStatusLoadedFromServer=false;updateAttendanceButton();
+  setTimeout(()=>{syncServerProfile();},20);
   setTimeout(openMorningSetupIfNeeded,250);
  }catch(e){
   console.warn('自動ログイン:',e.message);
