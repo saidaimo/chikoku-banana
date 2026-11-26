@@ -552,6 +552,8 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-m
     </div>
   </div>
 
+  <div id="jstClock" class="jst-clock">日本時間を読み込み中…</div>
+
   <section class="morning-plan-card" aria-label="朝の準備時間">
     <div class="morning-plan-heading">
       <strong id="morningPlanTitle">朝の準備</strong>
@@ -568,7 +570,6 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-m
     </div>
     <div id="morningWeatherUpdated" class="morning-updated">設定すると、学校周辺の予報を表示するよ。</div>
   </section>
-  <div id="jstClock" class="jst-clock">日本時間を読み込み中…</div>
   <div class="streak-hero">
     <div class="streak-caption">連続登校記録</div>
     <div class="streak-number"><strong id="bigStreak">0</strong><span>日連続！</span></div>
@@ -2107,7 +2108,8 @@ function renderMorningPlan(){
  const [h,m]=cfg.schoolStartTime.split(':').map(Number);
  const schoolMinutes=h*60+m;
  const extra=morningWeatherState.loaded&&morningWeatherState.rain?Number(cfg.rainAdjustmentMinutes||0):0;
- const leave=schoolMinutes-Number(cfg.commuteMinutes||0)-extra;
+ const safetyBufferMinutes=10; // 朝の準備表示だけ、登校目安を10分早める
+ const leave=schoolMinutes-Number(cfg.commuteMinutes||0)-extra-safetyBufferMinutes;
  const wake=leave-Number(cfg.preparationMinutes||0);
  $('morningWakeTime').textContent=formatMorningClock(wake);
  $('morningLeaveTime').textContent=formatMorningClock(leave);
