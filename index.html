@@ -1587,6 +1587,8 @@ async function harvestBananaTree(){
  catch(e){if(msg)msg.textContent=e.message;await loadBananaTree();}
 }
 
+// 購入処理中のテーマを記録し、連打による二重リクエストを防ぐ。
+const pendingThemePurchases=new Set();
 function renderShop(){
  if(!$('shopItems')||!profile)return;
  $('shopBalance').textContent=profile.bananas;
@@ -1594,6 +1596,7 @@ function renderShop(){
  const ownedThemes=Array.isArray(profile.ownedThemes)?profile.ownedThemes:['banana'];
  themes.forEach(t=>{
   const owned=ownedThemes.includes(t.id);
+  const pending=pendingThemePurchases.has(t.id);
   const row=document.createElement('div');row.className='card shop-item';
   const swatch=document.createElement('div');swatch.className='swatch';swatch.style.background=t.swatch;
   const info=document.createElement('div');info.className='shop-info';
@@ -1603,8 +1606,9 @@ function renderShop(){
   if(t.desc)info.append(name,desc);
   info.append(price);
   const btn=document.createElement('button');btn.className='shop-btn';
-  btn.textContent=owned?'購入済み':'購入';btn.disabled=owned;
-  if(!owned)btn.onclick=()=>buyTheme(t.id);
+  btn.textContent=owned?'購入済み':(pending?'購入中…':'購入');
+  btn.disabled=owned||pending;
+  if(!owned&&!pending)btn.onclick=()=>buyTheme(t.id);
   row.append(swatch,info,btn);$('shopItems').appendChild(row);
  });
 }
@@ -1632,14 +1636,23 @@ async function buyTheme(id){
  const t=themes.find(x=>x.id===id);if(!t||!profile)return;
  const ownedThemes=Array.isArray(profile.ownedThemes)?profile.ownedThemes:['banana'];
  if(ownedThemes.includes(id)){renderShop();return;}
+ if(pendingThemePurchases.has(id))return;
  if(profile.bananas<t.price){alert('バナナが足りないよ！\n必要：'+t.price+'本');return}
  if(!confirm(t.name+'を'+t.price+'バナナで購入する？'))return;
+ // サーバー確認中であることを即表示。購入確定前に残高や所持状態は変更しない。
+ pendingThemePurchases.add(id);renderShop();
+ let purchaseError=null;
  try{
   const r=await gasRequest('purchaseTheme',{theme:id});
   if(r.profile)profile={...profile,...r.profile};
-  persist();refreshProfile();renderShop();
-  alert(t.name+'を購入したよ！テーマ変更画面から適用できるよ。');
- }catch(e){alert('購入できませんでした。\n'+e.message)}
+  persist();refreshProfile();
+ }catch(e){purchaseError=e;}
+ finally{
+  pendingThemePurchases.delete(id);
+  renderShop();
+ }
+ if(purchaseError){alert('購入できませんでした。\n'+purchaseError.message);return;}
+ alert(t.name+'を購入したよ！テーマ変更画面から適用できるよ。');
 }
 async function selectTheme(id){
  const t=themes.find(x=>x.id===id);if(!t||!profile)return;
